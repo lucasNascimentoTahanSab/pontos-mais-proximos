@@ -10,7 +10,6 @@
  * plano recebido, apresentando complexidade O(nlog²n).
  */
 #include <iostream>
-#include <bits/stdc++.h>
 #include <math.h>
 
 using namespace std;
@@ -35,9 +34,10 @@ public:
 Ponto *obterParPontosMaisProximosPorDivisaoConquista(Ponto *, const int, const int);
 Ponto *obterParPontosMaisProximos(Ponto *, const int, const int);
 Ponto *obterParPontosMaisProximosEmFaixaCentral(Ponto *, const int, const double);
-Ponto *obterFaixaCentralDePontosOrdenada(Ponto *, const int, const double);
+Ponto *obterFaixaCentralDePontosOrdenada(Ponto *, const int, const int, const int, const double);
 Ponto *obterPontosOrdenados(const int);
 Ponto *obterParPontosDeMenorDistancia(Ponto *, Ponto *);
+int obterQuantidadePontosNaFaixa(Ponto *, const int, const int, const double);
 double calcularDistanciaEntrePontos(Ponto, Ponto);
 void ordenarPontosEmFuncaoDeX(Ponto *, const int);
 void ordenarPontosEmFuncaoDeY(Ponto *, const int);
@@ -66,25 +66,28 @@ int main(int argc, char const *argv[])
  * de uma distância menor à mínima entre as duas metades.
  * Complexidade: O(nlog²n).
  */
-Ponto *obterParPontosMaisProximosPorDivisaoConquista(Ponto *pontos, const int COMECO, const int QUANTIDADE_PONTOS)
+Ponto *obterParPontosMaisProximosPorDivisaoConquista(Ponto *pontos, const int COMECO, const int FIM)
 {
-  if (QUANTIDADE_PONTOS <= 3)
-    return obterParPontosMaisProximos(pontos, COMECO, QUANTIDADE_PONTOS);
+  if (FIM - COMECO <= 3)
+    return obterParPontosMaisProximos(pontos, COMECO, FIM);
 
-  const int POSICAO_PONTO_CENTRAL = QUANTIDADE_PONTOS / 2;
-  Ponto *pontosMaisProximosAEsquerda = obterParPontosMaisProximosPorDivisaoConquista(pontos, 0, POSICAO_PONTO_CENTRAL);
-  Ponto *pontosMaisProximosADireita = obterParPontosMaisProximosPorDivisaoConquista(pontos, POSICAO_PONTO_CENTRAL, QUANTIDADE_PONTOS);
+  const int POSICAO_PONTO_CENTRAL = FIM / 2;
+  Ponto *pontosMaisProximosAEsquerda = obterParPontosMaisProximosPorDivisaoConquista(pontos, COMECO, POSICAO_PONTO_CENTRAL);
+  Ponto *pontosMaisProximosADireita = obterParPontosMaisProximosPorDivisaoConquista(pontos, POSICAO_PONTO_CENTRAL, FIM);
 
   const double MENOR_DISTANCIA_A_ESQUERDA = calcularDistanciaEntrePontos(pontosMaisProximosAEsquerda[0], pontosMaisProximosAEsquerda[1]);
   const double MENOR_DISTANCIA_A_DIREITA = calcularDistanciaEntrePontos(pontosMaisProximosADireita[0], pontosMaisProximosADireita[1]);
   const double MENOR_DISTANCIA = MENOR_DISTANCIA_A_ESQUERDA < MENOR_DISTANCIA_A_DIREITA ? MENOR_DISTANCIA_A_ESQUERDA : MENOR_DISTANCIA_A_DIREITA;
-
   Ponto *pontosMaisProximos = MENOR_DISTANCIA == MENOR_DISTANCIA_A_ESQUERDA ? pontosMaisProximosAEsquerda : pontosMaisProximosADireita;
-  Ponto *faixaCentralDePontos = obterFaixaCentralDePontosOrdenada(pontos, QUANTIDADE_PONTOS, MENOR_DISTANCIA);
 
-  return obterParPontosDeMenorDistancia(
-      pontosMaisProximos,
-      obterParPontosMaisProximosEmFaixaCentral(faixaCentralDePontos, sizeof(faixaCentralDePontos) / sizeof(Ponto *), MENOR_DISTANCIA));
+  const int QUANTIDADE_PONTOS_FAIXA = obterQuantidadePontosNaFaixa(pontos, COMECO, FIM, MENOR_DISTANCIA);
+  Ponto *faixaCentralDePontos = obterFaixaCentralDePontosOrdenada(pontos, COMECO, FIM, QUANTIDADE_PONTOS_FAIXA, MENOR_DISTANCIA);
+  if (faixaCentralDePontos == NULL)
+    return pontosMaisProximos;
+
+  Ponto *pontosMaisProximosNaFaixa = obterParPontosMaisProximosEmFaixaCentral(faixaCentralDePontos, QUANTIDADE_PONTOS_FAIXA, MENOR_DISTANCIA);
+
+  return obterParPontosDeMenorDistancia(pontosMaisProximos, pontosMaisProximosNaFaixa);
 }
 
 /**
@@ -95,13 +98,13 @@ Ponto *obterParPontosMaisProximosPorDivisaoConquista(Ponto *pontos, const int CO
  * com o maior valor permitido na linguagem para ponto flutuante.
  * Complexidade: O(n²).
  */
-Ponto *obterParPontosMaisProximos(Ponto *pontos, const int COMECO, const int QUANTIDADE_PONTOS)
+Ponto *obterParPontosMaisProximos(Ponto *pontos, const int COMECO, const int FIM)
 {
   Ponto *pontosMaisProximos = (Ponto *)malloc(sizeof(Ponto) * 2);
   double menorDistanciaEntrePontos = __DBL_MAX__;
 
-  for (int i = COMECO; i < QUANTIDADE_PONTOS - 1; i++)
-    for (int j = i + 1; j < QUANTIDADE_PONTOS; j++)
+  for (int i = COMECO; i < FIM - 1; i++)
+    for (int j = i + 1; j < FIM; j++)
     {
       const double DISTANCIA_ENTRE_PONTOS = calcularDistanciaEntrePontos(pontos[i], pontos[j]);
       if (DISTANCIA_ENTRE_PONTOS < menorDistanciaEntrePontos)
@@ -144,23 +147,40 @@ Ponto *obterParPontosMaisProximosEmFaixaCentral(Ponto *pontos, const int QUANTID
 }
 
 /**
+ * Método responsável pela obtenção da quantidade de pontos que estarão
+ * contidos na faixa central. Este método foi utilizado pois não conseguíamos
+ * acessar a quantidade de elementos contidos na faixa central apenas por meio
+ * do vetor construído, sendo um ponto de melhoria no código.
+ */
+int obterQuantidadePontosNaFaixa(Ponto *pontos, const int COMECO, const int FIM, const double MENOR_DISTANCIA)
+{
+  const int QUANTIDADE_PONTOS = FIM - COMECO;
+  const int X_CENTRAL = pontos[QUANTIDADE_PONTOS / 2].x;
+  int quantidadePontosNaFaixa = 0;
+
+  for (int i = COMECO, j = 0; i < FIM; i++)
+    if (abs(pontos[i].x - X_CENTRAL) < MENOR_DISTANCIA)
+      quantidadePontosNaFaixa++;
+
+  return quantidadePontosNaFaixa;
+}
+
+/**
  * Método responsável pela obtenção dos pontos contidos na faixa central
  * de pontos do plano, definidos os limites inferior e superior para a faixa
  * a partir da menor distância já calculada.
  */
-Ponto *obterFaixaCentralDePontosOrdenada(Ponto *pontos, const int QUANTIDADE_PONTOS, const double MENOR_DISTANCIA)
+Ponto *obterFaixaCentralDePontosOrdenada(Ponto *pontos, const int COMECO, const int FIM, const int QUANTIDADE_PONTOS_FAIXA, const double MENOR_DISTANCIA)
 {
-  const int POSICAO_PONTO_CENTRAL = (pontos[0].x + pontos[QUANTIDADE_PONTOS - 1].x) / 2;
-  Ponto *faixaCentralDePontos = (Ponto *)malloc(sizeof(Ponto) * QUANTIDADE_PONTOS);
-  int quantidadePontosNaFaixa = 0;
-  for (int i = 0, j = 0; i < QUANTIDADE_PONTOS; i++)
-    if (abs(pontos[i].x - MENOR_DISTANCIA) < MENOR_DISTANCIA)
-    {
-      faixaCentralDePontos[j++] = pontos[i];
-      quantidadePontosNaFaixa++;
-    }
+  const int QUANTIDADE_PONTOS = FIM - COMECO;
+  const int X_CENTRAL = pontos[QUANTIDADE_PONTOS / 2].x;
+  Ponto *faixaCentralDePontos = (Ponto *)malloc(sizeof(Ponto) * QUANTIDADE_PONTOS_FAIXA);
 
-  ordenarPontosEmFuncaoDeY(faixaCentralDePontos, quantidadePontosNaFaixa);
+  for (int i = COMECO, j = 0; i < FIM && j < QUANTIDADE_PONTOS_FAIXA; i++)
+    if (abs(pontos[i].x - X_CENTRAL) < MENOR_DISTANCIA)
+      faixaCentralDePontos[j++] = pontos[i];
+
+  ordenarPontosEmFuncaoDeY(faixaCentralDePontos, QUANTIDADE_PONTOS_FAIXA);
 
   return faixaCentralDePontos;
 }
